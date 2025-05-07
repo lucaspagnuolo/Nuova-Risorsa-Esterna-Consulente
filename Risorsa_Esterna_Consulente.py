@@ -7,7 +7,6 @@ import io
 # ------------------------------------------------------------
 # Caricamento configurazione da Excel caricato dall'utente
 # ------------------------------------------------------------
-
 def load_config_from_bytes(data: bytes):
     cfg = pd.read_excel(io.BytesIO(data), sheet_name=None)
     ou_df = cfg.get("OU", pd.DataFrame(columns=["key", "label"]))
@@ -18,18 +17,21 @@ def load_config_from_bytes(data: bytes):
     defaults = dict(zip(def_df["key"], def_df["value"]))
     return ou_options, gruppi, defaults
 
-# File uploader per configurazione
-st.title("Configurazione Applicazioni Streamlit")
+# Config uploader
+st.set_page_config(page_title="1.3 Risorsa Esterna: Consulente")
+st.title("1.3 Risorsa Esterna: Consulente")
 config_file = st.file_uploader(
     "Carica config.xlsx",
-    type=["xlsx"], help="File con fogli OU, InserimentoGruppi e Defaults"
+    type=["xlsx"],
+    help="File con fogli OU, InserimentoGruppi e Defaults"
 )
 if not config_file:
     st.warning("Carica il file di configurazione per procedere.")
     st.stop()
 ou_options, gruppi, defaults = load_config_from_bytes(config_file.read())
 
-# Utility comuni ------------------------------------------------
+# Utility
+
 def formatta_data(data: str) -> str:
     for sep in ["-", "/"]:
         try:
@@ -40,7 +42,10 @@ def formatta_data(data: str) -> str:
             continue
     return data
 
-def genera_samaccountname(nome: str, cognome: str, secondo_nome: str = "", secondo_cognome: str = "", esterno: bool = False) -> str:
+
+def genera_samaccountname(nome: str, cognome: str,
+                           secondo_nome: str = "", secondo_cognome: str = "",
+                           esterno: bool = False) -> str:
     n, sn = nome.strip().lower(), secondo_nome.strip().lower()
     c, sc = cognome.strip().lower(), secondo_cognome.strip().lower()
     suffix = ".ext" if esterno else ""
@@ -51,7 +56,10 @@ def genera_samaccountname(nome: str, cognome: str, secondo_nome: str = "", secon
     if len(cand) <= limit: return cand + suffix
     return (f"{n[:1]}{sn[:1]}.{c}")[:limit] + suffix
 
-def build_full_name(cognome: str, secondo_cognome: str, nome: str, secondo_nome: str, esterno: bool = False) -> str:
+
+def build_full_name(cognome: str, secondo_cognome: str,
+                    nome: str, secondo_nome: str,
+                    esterno: bool = False) -> str:
     parts = [p for p in [cognome, secondo_cognome, nome, secondo_nome] if p]
     full = " ".join(parts)
     return full + (" (esterno)" if esterno else "")
@@ -63,42 +71,59 @@ HEADER = [
     "disable", "moveToOU", "telephoneNumber", "company"
 ]
 
-# ------------------------------------------------------------
-# App 1.3: Risorsa Esterna: Consulente
-# ------------------------------------------------------------
-st.header("1.3 Risorsa Esterna: Consulente")
-nome_cons            = st.text_input("Nome Consulente").strip().capitalize()
-secondo_nome_cons    = st.text_input("Secondo Nome").strip().capitalize()
-cognome_cons         = st.text_input("Cognome").strip().capitalize()
-secondo_cognome_cons = st.text_input("Secondo Cognome").strip().capitalize()
-num_tel_cons         = st.text_input("Numero di Telefono", "").replace(" ", "")
-desc_cons            = st.text_input("Description (lascia vuoto per <PC>)", "<PC>").strip()
-cf_cons              = st.text_input("Codice Fiscale", "").strip()
-exp_cons             = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default", "30-06-2025")).strip()
+# Input form
+nome        = st.text_input("Nome").strip().capitalize()
+secondo_nome= st.text_input("Secondo Nome").strip().capitalize()
+cognome     = st.text_input("Cognome").strip().capitalize()
+secondo_cognome = st.text_input("Secondo Cognome").strip().capitalize()
+telefono    = st.text_input("Numero di Telefono", "").replace(" ", "")
+description = st.text_input("Description (lascia vuoto per <PC>)", "<PC>").strip()
+cf          = st.text_input("Codice Fiscale", "").strip()
+exp_date    = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default", "30-06-2025")).strip()
 
-ou_value_cons        = ou_options.get("esterna_consulente", "Utenti esterni - Consulenti")
-employee_id_cons     = st.text_input("Employee ID", defaults.get("employee_id_default", "")).strip()
-department_cons      = defaults.get("department_consulente", "Utente esterno")
-inserimento_cons     = gruppi.get("esterna_consulente", "")
-company_cons         = defaults.get("company_default", "")
+# Fixed config values
+ou_value    = ou_options.get("esterna_consulente", "Utenti esterni - Consulenti")
+employee_id = defaults.get("employee_id_default", "")
+department  = defaults.get("department_consulente", "Utente esterno")
+inserimento = gruppi.get("esterna_consulente", "")
+company     = defaults.get("company_default", "")
+
+# Email flag and conditional input
+email_flag = st.radio("Email necessaria?", ["Sì", "No"]) == "Sì"
+if not email_flag:
+    custom_email = st.text_input("Email Personalizzata", "").strip()
+else:
+    custom_email = None
 
 if st.button("Genera CSV Consulente"):
-    sAM = genera_samaccountname(nome_cons, cognome_cons, secondo_nome_cons, secondo_cognome_cons, True)
-    cn  = build_full_name(cognome_cons, secondo_cognome_cons, nome_cons, secondo_nome_cons, True)
-    exp = formatta_data(exp_cons)
-    mail = f"{sAM}@consip.it"
+    sAM    = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
+    cn     = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
+    exp    = formatta_data(exp_date)
+    upn    = f"{sAM}@consip.it"
+    mail   = upn if email_flag else (custom_email or upn)
+    mobile = f"+39 {telefono}" if telefono else ""
+    name   = cn  # Name equals DisplayName
+    display= cn
+    given  = " ".join([nome, secondo_nome]).strip()
+    surn   = " ".join([cognome, secondo_cognome]).strip()
+
     row = [
-        sAM, "SI", ou_value_cons, cn.replace(" (esterno)", ""), cn, cn,
-        " ".join([nome_cons, secondo_nome_cons]).strip(),
-        " ".join([cognome_cons, secondo_cognome_cons]).strip(),
-        cf_cons, employee_id_cons, department_cons,
-        desc_cons or "<PC>", "No", exp,
-        f"{sAM}@consip.it", mail,
-        f"+39 {num_tel_cons}" if num_tel_cons else "",
-        "", inserimento_cons, "", "",
-        num_tel_cons, company_cons
+        sAM, "SI", ou_value, name, display, cn, given, surn,
+        cf, employee_id, department, description or "<PC>", "No", exp,
+        upn, mail, mobile, "", inserimento, "", "",
+        telefono, company
     ]
-    buf = io.StringIO(); csv.writer(buf).writerow(HEADER); csv.writer(buf).writerow(row); buf.seek(0)
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(HEADER)
+    writer.writerow(row)
+    buf.seek(0)
+
     st.dataframe(pd.DataFrame([row], columns=HEADER))
-    st.download_button("📥 Scarica CSV Consulente", buf.getvalue(), file_name=f"{cognome_cons}_{nome_cons[:1]}_consulente.csv", mime="text/csv")
-    st.success(f"✅ Generato {sAM}")
+    st.download_button(
+        "📥 Scarica CSV Consulente",
+        buf.getvalue(),
+        file_name=f"{cognome}_{nome[:1]}_consulente.csv",
+        mime="text/csv"
+    )
+    st.success(f"✅ File CSV generato per '{sAM}'")
