@@ -8,7 +8,6 @@ import io
 # Caricamento configurazione da Excel caricato dall'utente
 # ------------------------------------------------------------
 def load_config_from_bytes(data: bytes):
-    # Legge solo il foglio “Consulente”
     cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente")
     # Sezione OU
     ou_df = (
@@ -48,10 +47,13 @@ config_file = st.file_uploader(
     help="Deve contenere il foglio “Consulente” con colonna Section"
 )
 if not config_file:
-    st.warning("Per favore carica il file di configurazione per continuare.")
+    st.warning("Per favore carica il file di configurazione per procedere.")
     st.stop()
 
 ou_options, gruppi, defaults = load_config_from_bytes(config_file.read())
+
+# Debug: vedi cosa contiene realmente il dizionario 'gruppi'
+st.write("DEBUG – gruppi caricati:", gruppi)
 
 # ------------------------------------------------------------
 # Utility functions
@@ -122,6 +124,7 @@ department         = defaults.get("department_consulente", "")
 inserimento_gruppo = gruppi.get("esterna_consulente", "")
 company            = defaults.get("company_default", "")
 
+# Se inserimento_gruppo rimane vuoto, il debug sopra ti indicherà quali chiavi esistono
 # ------------------------------------------------------------
 # Generazione CSV
 # ------------------------------------------------------------
