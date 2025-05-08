@@ -52,9 +52,6 @@ if not config_file:
 
 ou_options, gruppi, defaults = load_config_from_bytes(config_file.read())
 
-# Debug: vedi cosa contiene realmente il dizionario 'gruppi'
-st.write("DEBUG – gruppi caricati:", gruppi)
-
 # ------------------------------------------------------------
 # Utility functions
 # ------------------------------------------------------------
@@ -124,7 +121,6 @@ department         = defaults.get("department_consulente", "")
 inserimento_gruppo = gruppi.get("esterna_consulente", "")
 company            = defaults.get("company_default", "")
 
-# Se inserimento_gruppo rimane vuoto, il debug sopra ti indicherà quali chiavi esistono
 # ------------------------------------------------------------
 # Generazione CSV
 # ------------------------------------------------------------
