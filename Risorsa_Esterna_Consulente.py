@@ -9,14 +9,6 @@ import io
 # ------------------------------------------------------------
 def load_config_from_bytes(data: bytes):
     cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente")
-    # Sezione OU
-    ou_df = (
-        cfg[cfg["Section"] == "OU"]
-        [["Key/App", "Label/Gruppi/Value"]]
-        .rename(columns={"Key/App": "key", "Label/Gruppi/Value": "label"})
-    )
-    ou_options = dict(zip(ou_df["key"], ou_df["label"]))
-
     # Sezione InserimentoGruppi
     grp_df = (
         cfg[cfg["Section"] == "InserimentoGruppi"]
@@ -33,7 +25,7 @@ def load_config_from_bytes(data: bytes):
     )
     defaults = dict(zip(def_df["key"], def_df["value"]))
 
-    return ou_options, gruppi, defaults
+    return gruppi, defaults
 
 # ------------------------------------------------------------
 # App 1.3: Risorsa Esterna - Consulente
@@ -44,13 +36,18 @@ st.title("1.3 Risorsa Esterna: Consulente")
 config_file = st.file_uploader(
     "Carica il file di configurazione (config_corrected.xlsx)",
     type=["xlsx"],
-    help="Deve contenere il foglio “Consulente” con colonna Section"
+    help="Deve contenere il foglio “Consulente” con colonne Section, Key/App, Label/Gruppi/Value"
 )
 if not config_file:
     st.warning("Per favore carica il file di configurazione per procedere.")
     st.stop()
 
-ou_options, gruppi, defaults = load_config_from_bytes(config_file.read())
+gruppi, defaults = load_config_from_bytes(config_file.read())
+
+# ------------------------------------------------------------
+# Determinazione del valore di OU dal default (ou_default)
+# ------------------------------------------------------------
+ou_value = defaults.get("ou_default", "")
 
 # ------------------------------------------------------------
 # Utility functions
@@ -104,7 +101,10 @@ secondo_nome    = st.text_input("Secondo Nome").strip().capitalize()
 cf              = st.text_input("Codice Fiscale", "").strip()
 telefono        = st.text_input("Mobile", "").replace(" ", "")
 description     = st.text_input("PC", "<PC>").strip()
-exp_date        = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default", "30-06-2025")).strip()
+exp_date        = st.text_input(
+    "Data di Fine (gg-mm-aaaa)",
+    defaults.get("expire_default", "30-06-2025")
+).strip()
 
 email_flag = st.radio("Email Consip necessaria?", ["Sì", "No"]) == "Sì"
 if not email_flag:
@@ -115,7 +115,6 @@ else:
 # ------------------------------------------------------------
 # Valori fissi prelevati dalla configurazione
 # ------------------------------------------------------------
-ou_value           = defaults.get("ou_esterna_consulente", "")
 employee_id        = defaults.get("employee_id_default", "")
 department         = defaults.get("department_consulente", "")
 inserimento_gruppo = gruppi.get("esterna_consulente", "")
