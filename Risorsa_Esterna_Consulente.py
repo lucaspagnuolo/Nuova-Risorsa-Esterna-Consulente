@@ -31,7 +31,6 @@ if not config_file:
 ou_options, gruppi, defaults = load_config_from_bytes(config_file.read())
 
 # Utility
-
 def formatta_data(data: str) -> str:
     for sep in ["-", "/"]:
         try:
@@ -41,7 +40,6 @@ def formatta_data(data: str) -> str:
         except:
             continue
     return data
-
 
 def genera_samaccountname(nome: str, cognome: str,
                            secondo_nome: str = "", secondo_cognome: str = "",
@@ -55,7 +53,6 @@ def genera_samaccountname(nome: str, cognome: str,
     cand = f"{(n[:1])}{(sn[:1])}.{c}{sc}"
     if len(cand) <= limit: return cand + suffix
     return (f"{n[:1]}{sn[:1]}.{c}")[:limit] + suffix
-
 
 def build_full_name(cognome: str, secondo_cognome: str,
                     nome: str, secondo_nome: str,
@@ -71,15 +68,23 @@ HEADER = [
     "disable", "moveToOU", "telephoneNumber", "company"
 ]
 
-# Input form
-nome        = st.text_input("Nome").strip().capitalize()
-secondo_nome= st.text_input("Secondo Nome").strip().capitalize()
-cognome     = st.text_input("Cognome").strip().capitalize()
+# ---------------------------------------------
+# Form ordinato e rinominato come richiesto
+# ---------------------------------------------
+cognome         = st.text_input("Cognome").strip().capitalize()
 secondo_cognome = st.text_input("Secondo Cognome").strip().capitalize()
-telefono    = st.text_input("Numero di Telefono", "").replace(" ", "")
-description = st.text_input("Description (lascia vuoto per <PC>)", "<PC>").strip()
-cf          = st.text_input("Codice Fiscale", "").strip()
-exp_date    = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default", "30-06-2025")).strip()
+nome            = st.text_input("Nome").strip().capitalize()
+secondo_nome    = st.text_input("Secondo Nome").strip().capitalize()
+cf              = st.text_input("Codice Fiscale", "").strip()
+telefono        = st.text_input("Mobile", "").replace(" ", "")
+description     = st.text_input("PC", "<PC>").strip()
+exp_date        = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default", "30-06-2025")).strip()
+
+email_flag = st.radio("Email Consip necessaria?", ["Sì", "No"]) == "Sì"
+if not email_flag:
+    custom_email = st.text_input("Email Personalizzata", "").strip()
+else:
+    custom_email = None
 
 # Fixed config values
 ou_value    = ou_options.get("esterna_consulente", "Utenti esterni - Consulenti")
@@ -88,13 +93,9 @@ department  = defaults.get("department_consulente", "Utente esterno")
 inserimento = gruppi.get("esterna_consulente", "")
 company     = defaults.get("company_default", "")
 
-# Email flag and conditional input
-email_flag = st.radio("Email necessaria?", ["Sì", "No"]) == "Sì"
-if not email_flag:
-    custom_email = st.text_input("Email Personalizzata", "").strip()
-else:
-    custom_email = None
-
+# ---------------------------------------------
+# Generazione CSV
+# ---------------------------------------------
 if st.button("Genera CSV Consulente"):
     sAM    = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
     cn     = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
