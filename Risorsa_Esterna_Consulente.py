@@ -45,7 +45,7 @@ if not config_file:
 gruppi, defaults = load_config_from_bytes(config_file.read())
 
 # ------------------------------------------------------------
-# Determinazione del valore di OU dal default (ou_default)
+# Default OU
 # ------------------------------------------------------------
 ou_value = defaults.get("ou_default", "")
 
@@ -92,33 +92,80 @@ HEADER = [
 ]
 
 # ------------------------------------------------------------
-# Form di input nell’ordine richiesto
+# Form di input
 # ------------------------------------------------------------
+st.subheader("Modulo Inserimento Risorsa Esterna: Consulente")
+
 cognome         = st.text_input("Cognome").strip().capitalize()
 secondo_cognome = st.text_input("Secondo Cognome").strip().capitalize()
 nome            = st.text_input("Nome").strip().capitalize()
 secondo_nome    = st.text_input("Secondo Nome").strip().capitalize()
 cf              = st.text_input("Codice Fiscale", "").strip()
 telefono        = st.text_input("Mobile", "").replace(" ", "")
-description     = st.text_input("PC", "<PC>").strip()
+description     = st.text_input("PC", defaults.get("description_default", "<PC>")).strip()
 exp_date        = st.text_input(
     "Data di Fine (gg-mm-aaaa)",
     defaults.get("expire_default", "30-06-2025")
 ).strip()
 
+# Email flag
 email_flag = st.radio("Email Consip necessaria?", ["Sì", "No"]) == "Sì"
+custom_email = None
 if not email_flag:
     custom_email = st.text_input("Email Personalizzata", "").strip()
-else:
-    custom_email = None
+
+# Profilazione SM flag e multilinea
+profilazione_flag = st.checkbox("Deve essere profilato su qualche SM?")
+sm_lines = []
+if profilazione_flag:
+    sm_lines = st.text_area(
+        "SM su quali va profilato", "", placeholder="Inserisci una SM per riga"
+    ).splitlines()
 
 # ------------------------------------------------------------
-# Valori fissi prelevati dalla configurazione
+# Valori fissi configurazione
 # ------------------------------------------------------------
 employee_id        = defaults.get("employee_id_default", "")
 department         = defaults.get("department_consulente", "")
 inserimento_gruppo = gruppi.get("esterna_consulente", "")
 company            = defaults.get("company_default", "")
+
+# ------------------------------------------------------------
+# Anteprima Messaggio
+# ------------------------------------------------------------
+if st.button("Anteprima Messaggio"):
+    sAM     = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
+    cn      = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
+    exp_fmt = formatta_data(exp_date)
+    upn     = f"{sAM}@consip.it"
+    mail    = upn if email_flag else (custom_email or upn)
+
+    # Header messaggio
+    st.markdown("Ciao.  \nRichiedo cortesemente la definizione di una casella di posta come sottoindicato.")
+    # Tabella Utente
+    table_md = f"""
+| Campo             | Valore                                     |
+|-------------------|--------------------------------------------|
+| Tipo Utenza       | Remota                                     |
+| Utenza            | {sAM}                                      |
+| Alias             | {sAM}                                      |
+| Display name      | {cn}                                       |
+| Common name       | {cn}                                       |
+| e-mail            | {mail}                                     |
+| e-mail secondaria | {sAM}@consipspa.mail.onmicrosoft.com      |
+"""
+    st.markdown(table_md)
+    st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it  ")
+    st.markdown("Aggiungere utenza di dominio ai gruppi:\n- O365 Utenti Standard  \n- O365 Teams Premium  \n- O365 Copilot Plus")
+
+    # Profilazione SM
+    if profilazione_flag and sm_lines:
+        st.markdown("Profilare su SM:")
+        for sm in sm_lines:
+            if sm.strip():
+                st.markdown(f"- {sm}")
+
+    st.markdown("Grazie  \nSaluti")
 
 # ------------------------------------------------------------
 # Generazione CSV
@@ -137,24 +184,19 @@ if st.button("Genera CSV Consulente"):
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
         cf, employee_id, department, description or "<PC>", "No", exp_fmt,
         upn, mail, mobile, "", inserimento_gruppo, "", "",
-        "", company  # telephoneNumber always empty
+        "", company
     ]
 
     buf = io.StringIO()
-    # Disattiviamo il quoting automatico e definiamo "\\" come escapechar
     writer = csv.writer(buf, quoting=csv.QUOTE_NONE, escapechar="\\")
 
-    # Aggiungiamo manualmente i doppi apici ai campi indicati
-    for i in (2, 3, 4, 5):       # OU, Name, DisplayName, cn
-        row[i] = f"\"{row[i]}\""
-    if secondo_nome:             # GivenName solo se presente
-        row[6] = f"\"{row[6]}\""
-    if secondo_cognome:          # Surname solo se presente
-        row[7] = f"\"{row[7]}\""
-    row[13] = f"\"{row[13]}\""   # ExpireDate
-    row[16] = f"\"{row[16]}\""   # mobile
+    # Quote
+    for i in (2,3,4,5): row[i] = f"\"{row[i]}\""
+    if secondo_nome: row[6] = f"\"{row[6]}\""
+    if secondo_cognome: row[7] = f"\"{row[7]}\""
+    row[13] = f"\"{row[13]}\""
+    row[16] = f"\"{row[16]}\""
 
-    # Scriviamo header + riga
     writer.writerow(HEADER)
     writer.writerow(row)
     buf.seek(0)
