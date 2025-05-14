@@ -9,21 +9,21 @@ import io
 # ------------------------------------------------------------
 def load_config_from_bytes(data: bytes):
     cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente")
-    # Sezione InserimentoGruppi
+    # Sezione InserimentoGruppi (per CSV)
     grp_df = (
         cfg[cfg["Section"] == "InserimentoGruppi"]
         [["Key/App", "Label/Gruppi/Value"]]
         .rename(columns={"Key/App": "app", "Label/Gruppi/Value": "gruppi"})
     )
-    gruppi = dict(zip(grp_df["app"], grp_df["gruppi"]))
+    gruppi = dict(zip(grp_df["app"], grp_df["gruppi"].astype(str)))
 
-    # Sezione Defaults
+    # Sezione Defaults (per OU, expire, department, description, company e O365-template)
     def_df = (
         cfg[cfg["Section"] == "Defaults"]
         [["Key/App", "Label/Gruppi/Value"]]
         .rename(columns={"Key/App": "key", "Label/Gruppi/Value": "value"})
     )
-    defaults = dict(zip(def_df["key"], def_df["value"]))
+    defaults = dict(zip(def_df["key"], def_df["value"].astype(str)))
 
     return gruppi, defaults
 
@@ -62,7 +62,6 @@ def formatta_data(data: str) -> str:
             continue
     return data
 
-# Nuovo algoritmo genera_samaccountname
 def genera_samaccountname(nome: str, cognome: str,
                           secondo_nome: str = "", secondo_cognome: str = "",
                           esterno: bool = False) -> str:
@@ -71,17 +70,14 @@ def genera_samaccountname(nome: str, cognome: str,
     suffix = ".ext" if esterno else ""
     limit  = 16 if esterno else 20
 
-    # 1) versione completa
     cand1 = f"{n}{sn}.{c}{sc}"
     if len(cand1) <= limit:
         return cand1 + suffix
 
-    # 2) iniziali nome + cognomi
     cand2 = f"{n[:1]}{sn[:1]}.{c}{sc}"
     if len(cand2) <= limit:
         return cand2 + suffix
 
-    # 3) fallback troncamento
     base = f"{n[:1]}{sn[:1]}.{c}"
     return base[:limit] + suffix
 
@@ -102,8 +98,6 @@ HEADER = [
 # ------------------------------------------------------------
 # Form di input
 # ------------------------------------------------------------
-st.subheader("Modulo Inserimento Risorsa Esterna: Consulente")
-
 cognome         = st.text_input("Cognome").strip().capitalize()
 secondo_cognome = st.text_input("Secondo Cognome").strip().capitalize()
 nome            = st.text_input("Nome").strip().capitalize()
@@ -118,40 +112,44 @@ exp_date        = st.text_input(
 
 # Email flag
 email_flag = st.radio("Email Consip necessaria?", ["Sì", "No"]) == "Sì"
-custom_email = None
 if not email_flag:
     custom_email = st.text_input("Email Personalizzata", "").strip()
 
-# Profilazione SM flag e multilinea
-profilazione_flag = st.checkbox("Deve essere profilato su qualche SM?")
+# Profilazione SM (solo se email_flag == True)
+profilazione_flag = False
 sm_lines = []
-if profilazione_flag:
-    sm_lines = st.text_area(
-        "SM su quali va profilato", "", placeholder="Inserisci una SM per riga"
-    ).splitlines()
+if email_flag:
+    profilazione_flag = st.checkbox("Deve essere profilato su qualche SM?")
+    if profilazione_flag:
+        sm_lines = st.text_area(
+            "SM su quali va profilato", "", placeholder="Inserisci una SM per riga"
+        ).splitlines()
 
 # ------------------------------------------------------------
 # Valori fissi configurazione
 # ------------------------------------------------------------
-employee_id        = defaults.get("employee_id_default", "")
-department         = defaults.get("department_consulente", "")
-inserimento_gruppo = gruppi.get("esterna_consulente", "")
-company            = defaults.get("company_default", "")
+department          = defaults.get("department_consulente", "")
+inserimento_base    = gruppi.get("esterna_consulente", "")
+inserimento_noemail = gruppi.get("esterna_consulente_No_email", "")
+company             = defaults.get("company_default", "")
+
+# O365 per il template (da Defaults)
+o365_std  = defaults.get("grp_o365_standard", "")
+o365_team = defaults.get("grp_o365_teams", "")
+o365_cop  = defaults.get("grp_o365_copilot", "")
 
 # ------------------------------------------------------------
 # Anteprima Messaggio
 # ------------------------------------------------------------
-if st.button("Template per Posta Elettronica"):
+if email_flag and st.button("Template per Posta Elettronica"):
     sAM     = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
     cn      = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
     exp_fmt = formatta_data(exp_date)
     upn     = f"{sAM}@consip.it"
-    mail    = upn if email_flag else (custom_email or upn)
+    mail    = upn
 
-    # Header messaggio
     st.markdown("Ciao.  \nRichiedo cortesemente la definizione di una casella di posta come sottoindicato.")
-    # Tabella Utente
-    table_md = f"""
+    st.markdown(f"""
 | Campo             | Valore                                     |
 |-------------------|--------------------------------------------|
 | Tipo Utenza       | Remota                                     |
@@ -161,12 +159,13 @@ if st.button("Template per Posta Elettronica"):
 | Common name       | {cn}                                       |
 | e-mail            | {mail}                                     |
 | e-mail secondaria | {sAM}@consipspa.mail.onmicrosoft.com      |
-"""
-    st.markdown(table_md)
-    st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it  ")
-    st.markdown("Aggiungere utenza di dominio ai gruppi:\n- O365 Utenti Standard  \n- O365 Teams Premium  \n- O365 Copilot Plus")
+""")
+    st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it")
+    st.markdown("Aggiungere utenza di dominio ai gruppi:")
+    st.markdown(f"- {o365_std}")
+    st.markdown(f"- {o365_team}")
+    st.markdown(f"- {o365_cop}")
 
-    # Profilazione SM
     if profilazione_flag and sm_lines:
         st.markdown("Profilare su SM:")
         for sm in sm_lines:
@@ -188,9 +187,13 @@ if st.button("Genera CSV Consulente"):
     given   = f"{nome} {secondo_nome}".strip()
     surn    = f"{cognome} {secondo_cognome}".strip()
 
+    # Scegli il gruppo di inserimento giusto
+    inserimento_gruppo = inserimento_base if email_flag else inserimento_noemail
+
     row = [
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
-        cf, employee_id, department, description or "<PC>", "No", exp_fmt,
+        cf, "",  # employeeID sempre vuoto
+        department, description or "<PC>", "No", exp_fmt,
         upn, mail, mobile, "", inserimento_gruppo, "", "",
         "", company
     ]
@@ -198,10 +201,10 @@ if st.button("Genera CSV Consulente"):
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_NONE, escapechar="\\")
 
-    # Quote
+    # Quote sui campi necessari
     for i in (2,3,4,5): row[i] = f"\"{row[i]}\""
-    if secondo_nome: row[6] = f"\"{row[6]}\""
-    if secondo_cognome: row[7] = f"\"{row[7]}\""
+    if secondo_nome:      row[6]  = f"\"{row[6]}\""
+    if secondo_cognome:   row[7]  = f"\"{row[7]}\""
     row[13] = f"\"{row[13]}\""
     row[16] = f"\"{row[16]}\""
 
