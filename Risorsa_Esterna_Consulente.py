@@ -62,6 +62,7 @@ def formatta_data(data: str) -> str:
             continue
     return data
 
+# Nuovo algoritmo genera_samaccountname
 def genera_samaccountname(nome: str, cognome: str,
                           secondo_nome: str = "", secondo_cognome: str = "",
                           esterno: bool = False) -> str:
@@ -69,13 +70,20 @@ def genera_samaccountname(nome: str, cognome: str,
     c, sc = cognome.strip().lower(), secondo_cognome.strip().lower()
     suffix = ".ext" if esterno else ""
     limit  = 16 if esterno else 20
-    cand   = f"{n}{sn}.{c}{sc}"
-    if len(cand) <= limit:
-        return cand + suffix
-    cand = f"{n[:1]}{sn[:1]}.{c}{sc}"
-    if len(cand) <= limit:
-        return cand + suffix
-    return (f"{n[:1]}{sn[:1]}.{c}")[:limit] + suffix
+
+    # 1) versione completa
+    cand1 = f"{n}{sn}.{c}{sc}"
+    if len(cand1) <= limit:
+        return cand1 + suffix
+
+    # 2) iniziali nome + cognomi
+    cand2 = f"{n[:1]}{sn[:1]}.{c}{sc}"
+    if len(cand2) <= limit:
+        return cand2 + suffix
+
+    # 3) fallback troncamento
+    base = f"{n[:1]}{sn[:1]}.{c}"
+    return base[:limit] + suffix
 
 def build_full_name(cognome: str, secondo_cognome: str,
                     nome: str, secondo_nome: str,
