@@ -128,10 +128,10 @@ if email_flag:
 # ------------------------------------------------------------
 # Valori fissi configurazione
 # ------------------------------------------------------------
-department          = defaults.get("department_consulente", "")
-inserimento_base    = gruppi.get("esterna_consulente", "")
-inserimento_noemail = gruppi.get("esterna_consulente_No_email", "")
-company             = defaults.get("company_default", "")
+department_default   = defaults.get("department_default", "")
+inserimento_base     = gruppi.get("esterna_consulente", "")
+inserimento_noemail  = gruppi.get("esterna_consulente_No_email", "")
+company              = defaults.get("company_default", "")
 
 # O365 per il template (da Defaults)
 o365_std  = defaults.get("grp_o365_standard", "")
@@ -192,8 +192,9 @@ if st.button("Genera CSV Consulente"):
 
     row = [
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
-        cf, "",  # employeeID sempre vuoto
-        department, description or "<PC>", "No", exp_fmt,
+        cf, "",                        # employeeID sempre vuoto
+        department_default,            # department da department_default
+        description or "<PC>", "No", exp_fmt,
         upn, mail, mobile, "", inserimento_gruppo, "", "",
         "", company
     ]
