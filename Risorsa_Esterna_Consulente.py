@@ -141,7 +141,7 @@ company            = defaults.get("company_default", "")
 # ------------------------------------------------------------
 # Anteprima Messaggio
 # ------------------------------------------------------------
-if st.button("Anteprima Messaggio"):
+if st.button("Template per Posta Elettronica"):
     sAM     = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
     cn      = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
     exp_fmt = formatta_data(exp_date)
