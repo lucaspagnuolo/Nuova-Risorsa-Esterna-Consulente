@@ -9,7 +9,7 @@ import unicodedata
 # Caricamento configurazione da Excel caricato dall'utente
 # ------------------------------------------------------------
 def load_config_from_bytes(data: bytes):
-    cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente")
+    cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente", engine="openpyxl")
     grp_df = (
         cfg[cfg["Section"] == "InserimentoGruppi"][["Key/App", "Label/Gruppi/Value"]]
         .rename(columns={"Key/App": "app", "Label/Gruppi/Value": "gruppi"})
@@ -39,11 +39,11 @@ def auto_quote(fields, quotechar='"', predicate=lambda s: ' ' in s):
         else:
             out.append(s)
     return out
+
 def normalize_name(s: str) -> str:
     nfkd = unicodedata.normalize('NFKD', s)
     ascii_str = nfkd.encode('ASCII', 'ignore').decode()
     return ascii_str.replace(' ', '').replace("'", '').lower()
-
 
 def formatta_data(data: str) -> str:
     for sep in ["-", "/"]:
@@ -131,14 +131,14 @@ exp_date = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_defau
 email_flag = st.radio("Email Consip necessaria?", ["Sì","No"]) == "Sì"
 if not email_flag:
     custom_email = st.text_input("Email Personalizzata").strip()
-profil_flag = False
-sm_lines = []
 if email_flag:
     profil_flag = st.checkbox("Profilazione SM?")
-    if profil_flag:
-        sm_lines = st.text_area("SM su quali va profilato").splitlines()
+    sm_lines = st.text_area("SM su quali va profilato").splitlines() if profil_flag else []
+else:
+    profil_flag = False
+    sm_lines = []
 
-# Preview Message (invariata)
+# Preview Message
 if email_flag and st.button("Template per Posta Elettronica"):
     sAM = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
     cn = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
@@ -146,12 +146,7 @@ if email_flag and st.button("Template per Posta Elettronica"):
     upn = f"{sAM}@consip.it"
     mail = upn
 
-    st.markdown(
-        """
-Ciao.  
-Richiedo cortesemente la definizione di una casella di posta come sottoindicato.
-"""
-    )
+    st.markdown("Ciao.  \nRichiedo cortesemente la definizione di una casella di posta come sottoindicato.")
     st.markdown(f"""
 | Campo             | Valore                                     |
 |-------------------|--------------------------------------------|
@@ -162,31 +157,23 @@ Richiedo cortesemente la definizione di una casella di posta come sottoindicato.
 | Common name       | {cn}                                       |
 | e-mail            | {mail}                                     |
 | e-mail secondaria | {sAM}@consipspa.mail.onmicrosoft.com      |
-"""
-    )
+""")
     st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it")
     st.markdown("Aggiungere utenza di dominio ai gruppi:")
     st.markdown(f"- {o365_std}")
     st.markdown(f"- {o365_team}")
     st.markdown(f"- {o365_cop}")
-
     if profil_flag and sm_lines:
         st.markdown("Profilare su SM:")
         for sm in sm_lines:
             if sm.strip():
                 st.markdown(f"- {sm}")
-
-    st.markdown(
-        """
-Grazie  
-Saluti
-"""
-    )
+    st.markdown("Grazie  \nSaluti")
 
 # Unified CSV generation
 if st.button("Genera CSV Consulente"):
-    sAM = genera_samaccountname(nome,cognome,secondo_nome,secondo_cognome,True)
-    cn = build_full_name(cognome,secondo_cognome,nome,secondo_nome,True)
+    sAM = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
+    cn = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
     exp_fmt = formatta_data(exp_date)
     upn = f"{sAM}@consip.it"
     mail = upn if email_flag else (custom_email or upn)
@@ -201,8 +188,17 @@ if st.button("Genera CSV Consulente"):
     basename = "_".join([nc] + ([ns] if ns else []) + [nome[:1].lower()])
 
     # rows
-    row_user = [sAM,"SI",ou_value,cn,cn,cn,given,surn,cf,"",department_default,description,"No",exp_fmt,upn,mail,mobile,"",inser_grp,"","","",company]
-    row_comp = [description or "","",f"{sAM}@consip.it","",f"\"{mobile}\"","",f"\"{cn}\"","","",""]
+    row_user = [
+        sAM, "SI", ou_value, cn, cn, cn, given, surn,
+        cf, "", department_default, description,
+        "No", exp_fmt, upn, mail, mobile,
+        "", inser_grp, "", "", "",
+        company
+    ]
+    row_comp = [
+        description or "", "", f"{sAM}@consip.it", "",
+        mobile, "", cn, "", "", ""
+    ]
 
     # message preview
     st.markdown(f"""
@@ -211,33 +207,23 @@ Si richiede modifiche come da file:
 - `{basename}_computer.csv`  (oggetti di tipo computer)  
 - `{basename}_utente.csv`  (oggetti di tipo utenze)  
 Archiviati al percorso:  
-`\\srv_dati.consip.tesoro.it\AreaCondivisa\DEPSI\IC\AD_Modifiche`  
+`\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
 Grazie
-"""
-    )
+""")
+
     # Download
     buf_user = io.StringIO()
     w1 = csv.writer(buf_user, quoting=csv.QUOTE_NONE, escapechar="\\")
-    # applichiamo l'auto-quote su row_ut
-    quoted_row_ut = auto_quote(
-        row_ut,
-        quotechar='"',
-        predicate=lambda s: ' ' in s  # mette virgolette solo se c'è uno spazio
-    )
-    w1.writerow(HEADER_UTENTE)
-    w1.writerow(quoted_row_ut)
+    quoted_row_user = auto_quote(row_user, quotechar='"', predicate=lambda s: ' ' in s)
+    w1.writerow(HEADER_USER)
+    w1.writerow(quoted_row_user)
     buf_user.seek(0)
 
     buf_comp = io.StringIO()
     w2 = csv.writer(buf_comp, quoting=csv.QUOTE_NONE, escapechar="\\")
-    # idem per row_cp
-    quoted_row_cp = auto_quote(
-        row_cp,
-        quotechar='"',
-        predicate=lambda s: ' ' in s
-    )
-    w2.writerow(HEADER_COMPUTER)
-    w2.writerow(quoted_row_cp)
+    quoted_row_comp = auto_quote(row_comp, quotechar='"', predicate=lambda s: ' ' in s)
+    w2.writerow(HEADER_COMP)
+    w2.writerow(quoted_row_comp)
     buf_comp.seek(0)
 
     st.download_button(
