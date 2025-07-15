@@ -133,8 +133,12 @@ if email_flag and st.button("Template per Posta Elettronica"):
     upn = f"{sAM}@consip.it"
     mail = upn
 
-    st.markdown("Ciao.  
-Richiedo cortesemente la definizione di una casella di posta come sottoindicato.")
+    st.markdown(
+    """
+Grazie  
+Saluti
+"""
+)
     st.markdown(f"""
 | Campo             | Valore                                     |
 |-------------------|--------------------------------------------|
