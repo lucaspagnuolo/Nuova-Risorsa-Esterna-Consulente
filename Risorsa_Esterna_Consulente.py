@@ -12,14 +12,16 @@ def load_config_from_bytes(data: bytes):
     cfg = pd.read_excel(io.BytesIO(data), sheet_name="Consulente")
     # Sezione InserimentoGruppi (per CSV)
     grp_df = (
-        cfg[cfg["Section"] == "InserimentoGruppi"][["Key/App", "Label/Gruppi/Value"]]
+        cfg[cfg["Section"] == "InserimentoGruppi"]
+        [["Key/App", "Label/Gruppi/Value"]]
         .rename(columns={"Key/App": "app", "Label/Gruppi/Value": "gruppi"})
     )
     gruppi = dict(zip(grp_df["app"], grp_df["gruppi"].astype(str)))
 
     # Sezione Defaults
     def_df = (
-        cfg[cfg["Section"] == "Defaults"][["Key/App", "Label/Gruppi/Value"]]
+        cfg[cfg["Section"] == "Defaults"]
+        [["Key/App", "Label/Gruppi/Value"]]
         .rename(columns={"Key/App": "key", "Label/Gruppi/Value": "value"})
     )
     defaults = dict(zip(def_df["key"], def_df["value"].astype(str)))
@@ -35,17 +37,28 @@ def normalize_name(s: str) -> str:
     ascii_str = nfkd.encode('ASCII', 'ignore').decode()
     return ascii_str.replace(' ', '').replace("'", '').lower()
 
-# SamAccountName with normalization
-# ------------------------------------------------------------
+def formatta_data(data: str) -> str:
+    """Formatta gg-mm-aaaa in MM/DD/YYYY 00:00."""
+    for sep in ["-", "/"]:
+        try:
+            g, m, a = map(int, data.split(sep))
+            dt = datetime(a, m, g) + timedelta(days=1)
+            return dt.strftime("%m/%d/%Y 00:00")
+        except:
+            continue
+    return data
+
 def genera_samaccountname(nome: str, cognome: str,
                           secondo_nome: str = "", secondo_cognome: str = "",
                           esterno: bool = False) -> str:
-    n = normalize_name(nome)
+    """Genera SAMAccountName normalizzando nome e cognomi."""
+    n  = normalize_name(nome)
     sn = normalize_name(secondo_nome)
-    c = normalize_name(cognome)
+    c  = normalize_name(cognome)
     sc = normalize_name(secondo_cognome)
     suffix = ".ext" if esterno else ""
     limit  = 16 if esterno else 20
+
     cand1 = f"{n}{sn}.{c}{sc}"
     if len(cand1) <= limit:
         return cand1 + suffix
@@ -55,14 +68,13 @@ def genera_samaccountname(nome: str, cognome: str,
     base = f"{n[:1]}{sn[:1]}.{c}"
     return base[:limit] + suffix
 
-# Full display name
-# ------------------------------------------------------------
 def build_full_name(cognome: str, secondo_cognome: str,
                     nome: str, secondo_nome: str,
                     esterno: bool = False) -> str:
     parts = [p for p in [cognome, secondo_cognome, nome, secondo_nome] if p]
     return " ".join(parts) + (" (esterno)" if esterno else "")
 
+# ------------------------------------------------------------
 # CSV header
 # ------------------------------------------------------------
 HEADER = [
@@ -79,7 +91,8 @@ st.set_page_config(page_title="1.3 Risorsa Esterna: Consulente")
 st.title("1.3 Risorsa Esterna: Consulente")
 
 config_file = st.file_uploader(
-    "Carica il file di configurazione (config.xlsx)", type=["xlsx"],
+    "Carica il file di configurazione (config.xlsx)",
+    type=["xlsx"],
     help="Deve contenere il foglio Consulente con Section, Key/App, Label/Gruppi/Value"
 )
 if not config_file:
@@ -88,20 +101,20 @@ if not config_file:
 
 gruppi, defaults = load_config_from_bytes(config_file.read())
 
-# Default OU e altre costanti
-ou_value          = defaults.get("ou_default", "")
-department_def    = defaults.get("department_default", "")
-description_def   = defaults.get("description_default", "<PC>")
-company           = defaults.get("company_default", "")
-inserimento_base  = gruppi.get("esterna_consulente", "")
-inserimento_noemail = gruppi.get("esterna_consulente_No_email", "")
+# default da config
+ou_value           = defaults.get("ou_default", "")
+department_def     = defaults.get("department_default", "")
+description_def    = defaults.get("description_default", "<PC>")
+company            = defaults.get("company_default", "")
+inserimento_base   = gruppi.get("esterna_consulente", "")
+inserimento_noemail= gruppi.get("esterna_consulente_No_email", "")
 o365_std, o365_team, o365_cop = (
     defaults.get("grp_o365_standard",""),
     defaults.get("grp_o365_teams",""),
     defaults.get("grp_o365_copilot","")
 )
 
-# Input form
+# input utente
 cognome         = st.text_input("Cognome").strip().capitalize()
 secondo_cognome = st.text_input("Secondo Cognome").strip().capitalize()
 nome            = st.text_input("Nome").strip().capitalize()
@@ -117,57 +130,62 @@ if not email_flag:
     custom_email = st.text_input("Email Personalizzata", "").strip()
 
 profil_flag = False
-sm_lines = []
+sm_lines    = []
 if email_flag:
     profil_flag = st.checkbox("Profilazione SM?")
     if profil_flag:
         sm_lines = st.text_area("SM su quali va profilato", "").splitlines()
 
 # ------------------------------------------------------------
-# Unified CSV generation
+# Unified CSV Generation
 # ------------------------------------------------------------
 if st.button("Genera CSV Consulente"):
-    sAM = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
-    cn  = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
-    exp_fmt = formatta_data(exp_date)
-    upn = f"{sAM}@consip.it"
-    mail = upn if email_flag else (custom_email or upn)
+    # valori
+    sAM    = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
+    cn     = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
+    exp_fmt= formatta_data(exp_date)
+    upn    = f"{sAM}@consip.it"
+    mail   = upn if email_flag else (custom_email or upn)
     mobile = f"+39 {telefono}" if telefono else ""
-    given = f"{nome} {secondo_nome}".strip()
-    surn  = f"{cognome} {secondo_cognome}".strip()
+    given  = f"{nome} {secondo_nome}".strip()
+    surn   = f"{cognome} {secondo_cognome}".strip()
     inser_grp = inserimento_base if email_flag else inserimento_noemail
 
-    # Normalize basename for download
-    norm_cog = normalize_name(cognome)
-    norm_sec = normalize_name(secondo_cognome) if secondo_cognome else ""
-    basename = "_".join([norm_cog] + ([norm_sec] if norm_sec else []) + [nome[:1].lower()])
+    # basename normalizzato per file
+    nc = normalize_name(cognome)
+    ns = normalize_name(secondo_cognome) if secondo_cognome else ""
+    basename = "_".join([nc] + ([ns] if ns else []) + [nome[:1].lower()])
 
-    # Build row
+    # compone riga CSV
     row = [
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
         cf, "", department_def, description, "No", exp_fmt,
         upn, mail, mobile, "", inser_grp, "", "", "", company
     ]
-    # Quote necessary fields
-    for i in (2,3,4,5): row[i] = f"\"{row[i]}\""
-    if secondo_nome:    row[6] = f"\"{row[6]}\""
-    if secondo_cognome: row[7] = f"\"{row[7]}\""
+    # quoting su campi testuali
+    for i in (2,3,4,5):
+        row[i] = f"\"{row[i]}\""
+    if secondo_nome:
+        row[6] = f"\"{row[6]}\""
+    if secondo_cognome:
+        row[7] = f"\"{row[7]}\""
     row[13] = f"\"{row[13]}\""
     row[16] = f"\"{row[16]}\""
 
-    # Preview and download
-    df = pd.DataFrame([row], columns=HEADER)
+    # anteprima
     st.subheader("Anteprima CSV Consulente")
-    st.dataframe(df)
+    st.dataframe(pd.DataFrame([row], columns=HEADER))
 
+    # download
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_NONE, escapechar="\\")
     writer.writerow(HEADER)
     writer.writerow(row)
     buf.seek(0)
-
     st.download_button(
         "📥 Scarica CSV Consulente",
-        data=buf.getvalue(), file_name=f"{basename}_consulente.csv", mime="text/csv"
+        data=buf.getvalue(),
+        file_name=f"{basename}_consulente.csv",
+        mime="text/csv"
     )
     st.success(f"✅ CSV generato per '{sAM}'")
