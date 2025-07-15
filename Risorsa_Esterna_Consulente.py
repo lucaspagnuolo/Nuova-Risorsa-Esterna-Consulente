@@ -125,16 +125,20 @@ if email_flag:
     if profil_flag:
         sm_lines = st.text_area("SM su quali va profilato").splitlines()
 
-# Anteprima Messaggio
-# ------------------------------------------------------------
+# Preview Message (invariata)
 if email_flag and st.button("Template per Posta Elettronica"):
-    sAM     = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
-    cn      = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
+    sAM = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
+    cn = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
     exp_fmt = formatta_data(exp_date)
-    upn     = f"{sAM}@consip.it"
-    mail    = upn
+    upn = f"{sAM}@consip.it"
+    mail = upn
 
-    st.markdown("Ciao.  \nRichiedo cortesemente la definizione di una casella di posta come sottoindicato.")
+    st.markdown(
+        """
+Ciao.  
+Richiedo cortesemente la definizione di una casella di posta come sottoindicato.
+"""
+    )
     st.markdown(f"""
 | Campo             | Valore                                     |
 |-------------------|--------------------------------------------|
@@ -145,21 +149,26 @@ if email_flag and st.button("Template per Posta Elettronica"):
 | Common name       | {cn}                                       |
 | e-mail            | {mail}                                     |
 | e-mail secondaria | {sAM}@consipspa.mail.onmicrosoft.com      |
-""")
+"""
+    )
     st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it")
     st.markdown("Aggiungere utenza di dominio ai gruppi:")
     st.markdown(f"- {o365_std}")
     st.markdown(f"- {o365_team}")
     st.markdown(f"- {o365_cop}")
 
-    if profilazione_flag and sm_lines:
+    if profil_flag and sm_lines:
         st.markdown("Profilare su SM:")
         for sm in sm_lines:
             if sm.strip():
                 st.markdown(f"- {sm}")
 
-    st.markdown("Grazie  \nSaluti")
-
+    st.markdown(
+        """
+Grazie  
+Saluti
+"""
+    )
 
 # Unified CSV generation
 if st.button("Genera CSV Consulente"):
