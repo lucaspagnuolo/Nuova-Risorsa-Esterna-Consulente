@@ -27,10 +27,6 @@ def load_config_from_bytes(data: bytes):
 # Utility functions
 # ------------------------------------------------------------
 def auto_quote(fields, quotechar='"', predicate=lambda s: ' ' in s):
-    """
-    Restituisce una nuova lista di stringhe in cui ogni campo
-    per cui predicate(stringa) è True viene avvolto tra quotechar.
-    """
     out = []
     for f in fields:
         s = str(f)
@@ -44,6 +40,7 @@ def normalize_name(s: str) -> str:
     nfkd = unicodedata.normalize('NFKD', s)
     ascii_str = nfkd.encode('ASCII', 'ignore').decode()
     return ascii_str.replace(' ', '').replace("'", '').lower()
+
 
 def formatta_data(data: str) -> str:
     for sep in ["-", "/"]:
@@ -157,7 +154,8 @@ if email_flag and st.button("Template per Posta Elettronica"):
 | Common name       | {cn}                                       |
 | e-mail            | {mail}                                     |
 | e-mail secondaria | {sAM}@consipspa.mail.onmicrosoft.com      |
-""")
+"""
+    )
     st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it")
     st.markdown("Aggiungere utenza di dominio ai gruppi:")
     st.markdown(f"- {o365_std}")
@@ -207,9 +205,16 @@ Si richiede modifiche come da file:
 - `{basename}_computer.csv`  (oggetti di tipo computer)  
 - `{basename}_utente.csv`  (oggetti di tipo utenze)  
 Archiviati al percorso:  
-`\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
+`\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
 Grazie
-""")
+"""
+    )
+
+    # Anteprime CSV
+    st.subheader("Anteprima CSV Utente")
+    st.dataframe(pd.DataFrame([row_user], columns=HEADER_USER))
+    st.subheader("Anteprima CSV Computer")
+    st.dataframe(pd.DataFrame([row_comp], columns=HEADER_COMP))
 
     # Download
     buf_user = io.StringIO()
