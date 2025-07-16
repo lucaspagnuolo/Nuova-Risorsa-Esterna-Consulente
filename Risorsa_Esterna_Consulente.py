@@ -185,22 +185,25 @@ if st.button("Genera CSV Consulente"):
     # Gruppi di inserimento
     inser_grp = inserimento_base if email_flag else inserimento_noemail
 
-    # basename normalizzato (per i nomi file)
-    norm_cognome      = normalize_name(cognome)
-    norm_secondo     = normalize_name(secondo_cognome) if secondo_cognome else ""
-    parts_norm       = [norm_cognome] + ([norm_secondo] if norm_secondo else []) + [nome[:1].lower()]
-    basename_norm    = "_".join(parts_norm)
-
-    # basename leggibile (per i messaggi)
-    parts_readable = [cognome] + ([secondo_cognome] if secondo_cognome else []) + [nome[:1]]
-    basename       = "_".join(parts_readable)
+    # ------------------------------------------------------------
+    # Costruzione del basename (come nel secondo snippet)
+    # ------------------------------------------------------------
+    parts = [cognome]
+    if secondo_cognome:
+        parts.append(secondo_cognome)
+    # iniziale nome
+    parts.append(nome[:1])
+    # opzionale iniziale secondo nome
+    if secondo_nome:
+        parts.append(secondo_nome[:1])
+    basename = "_".join(parts)
 
     # Messaggio di anteprima
     st.markdown(f"""
 Ciao.  
 Si richiede modifiche come da file:  
-- `{basename_norm}_computer.csv`  (oggetti di tipo computer)  
-- `{basename_norm}_utente.csv`    (oggetti di tipo utenze)  
+- `{basename}_computer.csv`  (oggetti di tipo computer)  
+- `{basename}_utente.csv`    (oggetti di tipo utenze)  
 Archiviati al percorso:  
 `\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
 Grazie
