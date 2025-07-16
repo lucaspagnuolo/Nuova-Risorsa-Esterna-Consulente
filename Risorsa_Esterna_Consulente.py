@@ -170,22 +170,43 @@ if email_flag and st.button("Template per Posta Elettronica"):
 
 # Unified CSV generation
 if st.button("Genera CSV Consulente"):
+    # Generazione account e nomi
     sAM = genera_samaccountname(nome, cognome, secondo_nome, secondo_cognome, True)
     cn = build_full_name(cognome, secondo_cognome, nome, secondo_nome, True)
+
+    # Normalizzazione date e contatti
     exp_fmt = formatta_data(exp_date)
     upn = f"{sAM}@consip.it"
     mail = upn if email_flag else (custom_email or upn)
     mobile = f"+39 {telefono}" if telefono else ""
     given = f"{nome} {secondo_nome}".strip()
-    surn = f"{cognome} {secondo_cognome}".strip()
+    surn  = f"{cognome} {secondo_cognome}".strip()
+
+    # Gruppi di inserimento
     inser_grp = inserimento_base if email_flag else inserimento_noemail
 
-    # basename normalizzato
-    nc = normalize_name(cognome)
-    ns = normalize_name(secondo_cognome) if secondo_cognome else ""
-    basename = "_".join([nc] + ([ns] if ns else []) + [nome[:1].lower()])
+    # basename normalizzato (per i nomi file)
+    norm_cognome      = normalize_name(cognome)
+    norm_secondo     = normalize_name(secondo_cognome) if secondo_cognome else ""
+    parts_norm       = [norm_cognome] + ([norm_secondo] if norm_secondo else []) + [nome[:1].lower()]
+    basename_norm    = "_".join(parts_norm)
 
-    # rows
+    # basename leggibile (per i messaggi)
+    parts_readable = [cognome] + ([secondo_cognome] if secondo_cognome else []) + [nome[:1]]
+    basename       = "_".join(parts_readable)
+
+    # Messaggio di anteprima
+    st.markdown(f"""
+Ciao.  
+Si richiede modifiche come da file:  
+- `{basename_norm}_computer.csv`  (oggetti di tipo computer)  
+- `{basename_norm}_utente.csv`    (oggetti di tipo utenze)  
+Archiviati al percorso:  
+`\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
+Grazie
+""")
+
+    # Costruzione righe CSV
     row_user = [
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
         cf, "", department_default, description,
@@ -197,18 +218,6 @@ if st.button("Genera CSV Consulente"):
         description or "", "", f"{sAM}@consip.it", "",
         mobile, "", cn, "", "", ""
     ]
-
-    # message preview
-    st.markdown(f"""
-Ciao.  
-Si richiede modifiche come da file:  
-- `{basename}_computer.csv`  (oggetti di tipo computer)  
-- `{basename}_utente.csv`  (oggetti di tipo utenze)  
-Archiviati al percorso:  
-`\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
-Grazie
-"""
-    )
 
     # Anteprime CSV
     st.subheader("Anteprima CSV Utente")
