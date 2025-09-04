@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import io
 import unicodedata
+import re
 
 # ------------------------------------------------------------
 # Caricamento configurazione da Excel caricato dall'utente
@@ -111,9 +112,10 @@ description_default = defaults.get("description_default", "<PC>")
 company = defaults.get("company_default", "")
 inserimento_base = gruppi.get("esterna_consulente", "")
 inserimento_noemail = gruppi.get("esterna_consulente_No_email", "")
-o365_std = defaults.get("grp_o365_standard", "")
-o365_team = defaults.get("grp_o365_teams", "")
-o365_cop = defaults.get("grp_o365_copilot", "")
+o365_groups_raw = defaults.get("o365_groups", "").strip()
+o365_std = defaults.get("grp_o365_standard", "").strip()
+o365_team = defaults.get("grp_o365_teams", "").strip()
+o365_cop = defaults.get("grp_o365_copilot", "").strip()
 
 # input
 cognome = st.text_input("Cognome").strip().capitalize()
@@ -157,10 +159,7 @@ if email_flag and st.button("Template per Posta Elettronica"):
 """
     )
     st.markdown("Inviare batch di notifica migrazione mail a: imac@consip.it")
-    st.markdown("Aggiungere utenza di dominio ai gruppi:")
-    st.markdown(f"- {o365_std}")
-    st.markdown(f"- {o365_team}")
-    st.markdown(f"- {o365_cop}")
+    # LA LISTA DEI GRUPPI O365 È STATA RIMOSSA COME RICHIESTO
     if profil_flag and sm_lines:
         st.markdown("Profilare su SM:")
         for sm in sm_lines:
@@ -182,7 +181,7 @@ if st.button("Genera CSV Consulente"):
     given = f"{nome} {secondo_nome}".strip()
     surn  = f"{cognome} {secondo_cognome}".strip()
 
-    # Gruppi di inserimento
+    # Gruppi di inserimento (usato SOLO internamente per costruire il profilo)
     inser_grp = inserimento_base if email_flag else inserimento_noemail
 
     # ------------------------------------------------------------
@@ -204,17 +203,19 @@ Ciao.
 Si richiede modifiche come da file:  
 - `{basename}_computer.csv`  (oggetti di tipo computer)  
 - `{basename}_utente.csv`    (oggetti di tipo utenze)  
+- `{basename}_profilazione.csv`  (profilazione gruppi)  
 Archiviati al percorso:  
 `\\\\srv_dati.consip.tesoro.it\\AreaCondivisa\\DEPSI\\IC\\AD_Modifiche`  
 Grazie
 """)
 
     # Costruzione righe CSV
+    # NOTA: InserimentoGruppo nel CSV utente RIMANE VUOTO come richiesto
     row_user = [
         sAM, "SI", ou_value, cn, cn, cn, given, surn,
         cf, "", department_default, description,
         "No", exp_fmt, upn, mail, mobile,
-        "", inser_grp, "", "", "",
+        "", "", "", "", "",
         company
     ]
     row_comp = [
@@ -222,37 +223,6 @@ Grazie
         mobile, "", cn, "", "", ""
     ]
 
-    # Anteprime CSV
-    st.subheader("Anteprima CSV Utente")
-    st.dataframe(pd.DataFrame([row_user], columns=HEADER_USER))
-    st.subheader("Anteprima CSV Computer")
-    st.dataframe(pd.DataFrame([row_comp], columns=HEADER_COMP))
-
-    # Download
-    buf_user = io.StringIO()
-    w1 = csv.writer(buf_user, quoting=csv.QUOTE_NONE, escapechar="\\")
-    quoted_row_user = auto_quote(row_user, quotechar='"', predicate=lambda s: ' ' in s)
-    w1.writerow(HEADER_USER)
-    w1.writerow(quoted_row_user)
-    buf_user.seek(0)
-
-    buf_comp = io.StringIO()
-    w2 = csv.writer(buf_comp, quoting=csv.QUOTE_NONE, escapechar="\\")
-    quoted_row_comp = auto_quote(row_comp, quotechar='"', predicate=lambda s: ' ' in s)
-    w2.writerow(HEADER_COMP)
-    w2.writerow(quoted_row_comp)
-    buf_comp.seek(0)
-
-    st.download_button(
-        "📥 Scarica CSV Utente",
-        data=buf_user.getvalue(),
-        file_name=f"{basename}_utente.csv",
-        mime="text/csv"
-    )
-    st.download_button(
-        "📥 Scarica CSV Computer",
-        data=buf_comp.getvalue(),
-        file_name=f"{basename}_computer.csv",
-        mime="text/csv"
-    )
-    st.success(f"✅ CSV generati per '{sAM}'")
+    # ------------------------------------------------------------
+    # Costruzione Profilazione: prima O365 groups (dalla key o365_groups o dai singoli),
+    # poi il gruppo specifico esterna_consulente / esterna_consulente_No_email
