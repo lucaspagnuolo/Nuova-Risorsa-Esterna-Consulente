@@ -42,7 +42,6 @@ def normalize_name(s: str) -> str:
     ascii_str = nfkd.encode('ASCII', 'ignore').decode()
     return ascii_str.replace(' ', '').replace("'", '').lower()
 
-
 def formatta_data(data: str) -> str:
     for sep in ["-", "/"]:
         try:
@@ -103,19 +102,24 @@ if not config_file:
     st.warning("Per favore carica il file di configurazione per procedere.")
     st.stop()
 
-gruppi, defaults = load_config_from_bytes(config_file.read())
+# PROTEZIONE: se la lettura del file va in eccezione, mostro l'errore ma non faccio cadere l'app
+try:
+    gruppi, defaults = load_config_from_bytes(config_file.read())
+except Exception as e:
+    st.warning("Impossibile leggere il file di configurazione. Verifica che il foglio 'Consulente' esista e contenga le colonne corrette.\n\nErrore: " + str(e))
+    gruppi, defaults = {}, {}
 
-# defaults
+# defaults (uso .get con fallback stringa vuota per evitare .strip() su None)
 ou_value = defaults.get("ou_default", "")
 department_default = defaults.get("department_default", "")
 description_default = defaults.get("description_default", "<PC>")
 company = defaults.get("company_default", "")
 inserimento_base = gruppi.get("esterna_consulente", "")
 inserimento_noemail = gruppi.get("esterna_consulente_No_email", "")
-o365_groups_raw = defaults.get("o365_groups", "").strip()
-o365_std = defaults.get("grp_o365_standard", "").strip()
-o365_team = defaults.get("grp_o365_teams", "").strip()
-o365_cop = defaults.get("grp_o365_copilot", "").strip()
+o365_groups_raw = defaults.get("o365_groups", "").strip() if defaults else ""
+o365_std = defaults.get("grp_o365_standard", "").strip() if defaults else ""
+o365_team = defaults.get("grp_o365_teams", "").strip() if defaults else ""
+o365_cop = defaults.get("grp_o365_copilot", "").strip() if defaults else ""
 
 # input
 cognome = st.text_input("Cognome").strip().capitalize()
@@ -125,7 +129,7 @@ secondo_nome = st.text_input("Secondo Nome").strip().capitalize()
 cf = st.text_input("Codice Fiscale").strip()
 telefono = st.text_input("Mobile").replace(" ", "")
 description = st.text_input("PC", description_default).strip()
-exp_date = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default","30-06-2025")).strip()
+exp_date = st.text_input("Data di Fine (gg-mm-aaaa)", defaults.get("expire_default","30-06-2025") if defaults else "30-06-2025").strip()
 
 email_flag = st.radio("Email Consip necessaria?", ["Sì","No"]) == "Sì"
 if not email_flag:
@@ -185,17 +189,15 @@ if st.button("Genera CSV Consulente"):
     inser_grp = inserimento_base if email_flag else inserimento_noemail
 
     # ------------------------------------------------------------
-    # Costruzione del basename (come nel secondo snippet)
+    # Costruzione del basename
     # ------------------------------------------------------------
     parts = [cognome]
     if secondo_cognome:
         parts.append(secondo_cognome)
-    # iniziale nome
-    parts.append(nome[:1])
-    # opzionale iniziale secondo nome
+    parts.append(nome[:1] if nome else "")
     if secondo_nome:
         parts.append(secondo_nome[:1])
-    basename = "_".join(parts)
+    basename = "_".join([p for p in parts if p])
 
     # Messaggio di anteprima
     st.markdown(f"""
@@ -226,3 +228,85 @@ Grazie
     # ------------------------------------------------------------
     # Costruzione Profilazione: prima O365 groups (dalla key o365_groups o dai singoli),
     # poi il gruppo specifico esterna_consulente / esterna_consulente_No_email
+    # ------------------------------------------------------------
+    profile_groups_list = []
+
+    # 1) se è presente defaults['o365_groups'], split su ; o ,
+    if o365_groups_raw:
+        tokens = re.split(r'[;,]', o365_groups_raw)
+        for t in tokens:
+            token = t.strip()
+            if token:
+                if token.startswith("365 "):
+                    token = "O" + token
+                profile_groups_list.append(token)
+    else:
+        # fallback sui singoli default
+        for g in (o365_std, o365_team, o365_cop):
+            if g and g.strip():
+                token = g.strip()
+                if token.startswith("365 "):
+                    token = "O" + token
+                profile_groups_list.append(token)
+
+    # 2) aggiungo il gruppo specifico di inserimento (se presente)
+    if inser_grp and str(inser_grp).strip():
+        profile_groups_list.append(str(inser_grp).strip())
+
+    # join senza spazi dopo ';' (utente ha richiesto questo formato)
+    profile_groups = ";".join(profile_groups_list)
+
+    # Costruisco riga Profilazione con stesso header di HEADER_USER, ma valorizzando solo sAMAccountName e InserimentoGruppo
+    profile_row = [""] * len(HEADER_USER)
+    profile_row[0] = sAM
+    profile_row[18] = profile_groups
+
+    # Anteprime CSV
+    st.subheader("Anteprima CSV Utente")
+    st.dataframe(pd.DataFrame([row_user], columns=HEADER_USER))
+    st.subheader("Anteprima CSV Computer")
+    st.dataframe(pd.DataFrame([row_comp], columns=HEADER_COMP))
+    st.subheader("Anteprima CSV Profilazione")
+    st.dataframe(pd.DataFrame([profile_row], columns=HEADER_USER))
+
+    # Download
+    buf_user = io.StringIO()
+    w1 = csv.writer(buf_user, quoting=csv.QUOTE_NONE, escapechar="\\")
+    quoted_row_user = auto_quote(row_user, quotechar='"', predicate=lambda s: ' ' in s)
+    w1.writerow(HEADER_USER)
+    w1.writerow(quoted_row_user)
+    buf_user.seek(0)
+
+    buf_comp = io.StringIO()
+    w2 = csv.writer(buf_comp, quoting=csv.QUOTE_NONE, escapechar="\\")
+    quoted_row_comp = auto_quote(row_comp, quotechar='"', predicate=lambda s: ' ' in s)
+    w2.writerow(HEADER_COMP)
+    w2.writerow(quoted_row_comp)
+    buf_comp.seek(0)
+
+    buf_prof = io.StringIO()
+    w3 = csv.writer(buf_prof, quoting=csv.QUOTE_NONE, escapechar="\\")
+    quoted_profile_row = auto_quote(profile_row, quotechar='"', predicate=lambda s: ' ' in s)
+    w3.writerow(HEADER_USER)
+    w3.writerow(quoted_profile_row)
+    buf_prof.seek(0)
+
+    st.download_button(
+        "📥 Scarica CSV Utente",
+        data=buf_user.getvalue(),
+        file_name=f"{basename}_utente.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "📥 Scarica CSV Computer",
+        data=buf_comp.getvalue(),
+        file_name=f"{basename}_computer.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "📥 Scarica CSV Profilazione",
+        data=buf_prof.getvalue(),
+        file_name=f"{basename}_profilazione.csv",
+        mime="text/csv"
+    )
+    st.success(f"✅ CSV generati per '{sAM}'")
